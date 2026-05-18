@@ -843,12 +843,12 @@ function renderOutfitContent(){
       }
     </div>
 
-    ${outfitData.selected.length>0?`<div class="field">
-      <label>選択中の衣装（${outfitData.selected.length}着）</label>
+    <div id="selected-chips" ${outfitData.selected.length===0?'style="display:none"':''} class="field">
+      <label class="chips-label">選択中の衣装（${outfitData.selected.length}着）</label>
       <div class="selected-outfits">
         ${outfitData.selected.map((id,i)=>{const o=OUTFITS.find(x=>x.id===id);return o?`<div class="selected-outfit-chip">${o.name}</div>`:''}).join('')}
       </div>
-    </div>`:''}
+    </div>
 
     <div class="field">
       <label>補足メモ<span class="opt">任意</span></label>
@@ -886,14 +886,42 @@ function switchCategory(cat){
 }
 
 function toggleOutfit(id){
-  const scrollY=window.scrollY;
   const idx=outfitData.selected.indexOf(id);
   if(idx>=0){outfitData.selected.splice(idx,1);}
   else{outfitData.selected.push(id);}
   outfitData.memo=document.getElementById('outfit-memo')?.value||outfitData.memo||'';
-  _outfitAnimate=false; // 選択時はアニメーションなし
-  renderOutfitContent();
-  requestAnimationFrame(()=>window.scrollTo(0,scrollY));
+
+  // DOMを直接更新（再レンダリングなし）
+  const card=document.getElementById('oc-'+id);
+  if(card){
+    const isSelected=outfitData.selected.includes(id);
+    card.classList.toggle('selected',isSelected);
+  }
+
+  // 選択中バッジを更新
+  outfitData.selected.forEach((sid,i)=>{
+    const badge=document.getElementById('ob-'+sid);
+    if(badge)badge.textContent=i+1;
+  });
+
+  // 選択済みチップエリアを更新
+  const chipsWrap=document.getElementById('selected-chips');
+  if(chipsWrap){
+    if(outfitData.selected.length===0){
+      chipsWrap.style.display='none';
+    } else {
+      chipsWrap.style.display='';
+      const label=chipsWrap.querySelector('.chips-label');
+      if(label)label.textContent=`選択中の衣装（${outfitData.selected.length}着）`;
+      const chips=chipsWrap.querySelector('.selected-outfits');
+      if(chips){
+        chips.innerHTML=outfitData.selected.map(sid=>{
+          const o=OUTFITS.find(x=>x.id===sid);
+          return o?`<div class="selected-outfit-chip">${o.name}</div>`:'';
+        }).join('');
+      }
+    }
+  }
 }
 
 function confirmOutfit(){
