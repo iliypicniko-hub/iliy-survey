@@ -370,7 +370,7 @@
 </div>
 
 <script>
-const API='https://script.google.com/macros/s/AKfycbzlunSk2J9YzBFu-3ruppUzOKdi0pxAXtfUWjHXhSZNCGt9zFZt47SaI9lUlXAGUMqUag/exec';
+const API='https://script.google.com/macros/s/AKfycbwHeyyigTzret7QPqlc5lNN_YUvRtJLNBVgLAoT8D2TL1gGaq1oGsn2P2MsFAqz2w_B6A/exec';
 const CATEGORIES=['80cm','90cm','100cm','マタニティ'];
 
 async function apiPost(b){const r=await fetch(API,{method:'POST',body:JSON.stringify(b)});return r.json();}
@@ -453,6 +453,10 @@ async function initClient(id){
 
 async function renderSelector(){
   if(!settingsLoaded)await loadSettings();
+  // 前回の選択を復元するためのデフォルト値を取得
+  const prevFlower=customer.flowerOption&&customer.flowerOption!=='none'?'花束を注文している':(customer.flowerOption==='none'&&(customer.sectionSentStatus?.flower||customer.sectionSentStatus?.hair||customer.sectionSentStatus?.outfitChosen))?'花束を注文していない':'';
+  const prevHair=customer.hairOption==='female'?'女性ヘアセット＆メイク':customer.hairOption==='male'?'男性ヘアセット':customer.hairOption==='both'?'両方（女性＋男性）':(customer.hairOption==='none'&&(customer.sectionSentStatus?.flower||customer.sectionSentStatus?.outfit||customer.sectionSentStatus?.outfitChosen))?'ヘアメイクなし':'';
+  const prevOutfit=customer.sectionSentStatus?.outfitChosen?'衣装レンタルを利用する':customer.sectionSentStatus?.outfitNotNeeded?'衣装レンタルは利用しない':'';
   updateProgressEmpty();
   const m=document.getElementById('form-main');
   m.innerHTML=`<div class="fade-in">
@@ -461,29 +465,29 @@ async function renderSelector(){
     <div class="field">
       <label>花束オプション<span class="req">必須</span>${SETTINGS.flower_detail?`<button type="button" onclick="showOptionDetail('flower')" style="margin-left:8px;padding:2px 10px;background:var(--flower-light);border:1px solid var(--flower-border);border-radius:10px;font-family:'Noto Sans JP',sans-serif;font-size:10px;color:var(--flower);cursor:pointer;">詳細を見る</button>`:''}
       </label>
-      ${rg('has-flower',['花束を注文している','花束を注文していない'],'col1',sectionStatus.flower)}
+      ${rg('has-flower',['花束を注文している','花束を注文していない'],'col1',sectionStatus.flower,prevFlower)}
       <div class="error-msg" id="err-flower">選択してください</div>
     </div>
     <div class="field">
       <label>ヘアメイクオプション<span class="req">必須</span>${SETTINGS.hair_detail?`<button type="button" onclick="showOptionDetail('hair')" style="margin-left:8px;padding:2px 10px;background:#FBEAF0;border:1px solid #ED93B1;border-radius:10px;font-family:'Noto Sans JP',sans-serif;font-size:10px;color:#993556;cursor:pointer;">詳細を見る</button>`:''}
       </label>
-      ${rg('has-hair',['女性ヘアセット＆メイク','男性ヘアセット','両方（女性＋男性）','ヘアメイクなし'],'col1',sectionStatus.hair)}
+      ${rg('has-hair',['女性ヘアセット＆メイク','男性ヘアセット','両方（女性＋男性）','ヘアメイクなし'],'col1',sectionStatus.hair,prevHair)}
       <div class="error-msg" id="err-hair">選択してください</div>
     </div>
     <div class="field">
       <label>衣装レンタルオプション<span class="req">必須</span>${SETTINGS.outfit_detail?`<button type="button" onclick="showOptionDetail('outfit')" style="margin-left:8px;padding:2px 10px;background:var(--prop-light);border:1px solid var(--prop-border);border-radius:10px;font-family:'Noto Sans JP',sans-serif;font-size:10px;color:var(--prop);cursor:pointer;">詳細を見る</button>`:''}
       </label>
-      ${rg('has-outfit',['衣装レンタルを利用する','衣装レンタルは利用しない'],'col1',sectionStatus.outfit)}
+      ${rg('has-outfit',['衣装レンタルを利用する','衣装レンタルは利用しない'],'col1',sectionStatus.outfit,prevOutfit)}
       <div class="error-msg" id="err-outfit">選択してください</div>
     </div>
     <div class="nav"><button class="btn-back" onclick="renderCommon()">← 戻る</button><button class="btn-next" onclick="startSections()">次へ　→</button></div>
   </div>`;
 }
 
-function rg(name,opts,col,locked){
+function rg(name,opts,col,locked,prevVal){
   const note=locked?'<span style="color:var(--success);font-size:11px;margin-left:6px">✓ 送信済み</span>':'';
   return note+`<div class="radio-grid ${col||''}" style="${locked?'opacity:.5;pointer-events:none;':''}">`+
-    opts.map(o=>`<label class="choice-card"><input type="radio" name="${name}" value="${o}"${locked?' disabled':''}><div class="choice-label"><div class="choice-dot"></div>${o}</div></label>`).join('')+'</div>';
+    opts.map(o=>`<label class="choice-card"><input type="radio" name="${name}" value="${o}"${locked?' disabled':''}${!locked&&prevVal===o?' checked':''}><div class="choice-label"><div class="choice-dot"></div>${o}</div></label>`).join('')+'</div>';
 }
 
 async function startSections(){
@@ -500,10 +504,12 @@ async function startSections(){
   // オプション内容をGASのcustomersシートに保存
   const flowerOpt=flower==='花束を注文している'?'flower':'none';
   const hairOpt=hair==='女性ヘアセット＆メイク'?'female':hair==='男性ヘアセット'?'male':hair==='両方（女性＋男性）'?'both':'none';
+  const outfitOpt=outfit==='衣装レンタルを利用する'?'outfit':'none';
   try{
-    await apiPost({action:'updateOptions',cid,flowerOption:flowerOpt,hairOption:hairOpt});
+    await apiPost({action:'updateOptions',cid,flowerOption:flowerOpt,hairOption:hairOpt,outfitOption:outfitOpt});
     customer.flowerOption=flowerOpt;
     customer.hairOption=hairOpt;
+    customer.outfitOption=outfitOpt;
   }catch(e){console.warn('updateOptions failed:',e);}
 
   sectionsToFill=[];
@@ -1201,11 +1207,11 @@ function buildAdminCard(c){
       <div style="margin-bottom:14px">
         ${secSt('flower','🌷 花束',needsFlower)}
         ${secSt('hair','💄 ヘアメイク',needsHair)}
-        ${secSt('outfit','👗 衣装レンタル',noAnswerYet||ss.outfit)}
+        ${secSt('outfit','👗 衣装レンタル',noAnswerYet||ss.outfit||ss.outfitChosen)}
       </div>
       ${(!allNotNeeded&&(noAnswerYet||needsFlower||needsHair||ss.outfit))?`<div class="section-urls">
         <div class="section-urls-title">担当者への共有URL</div>
-        ${(noAnswerYet?['flower','hair','outfit']:[needsFlower?'flower':null,needsHair?'hair':null,ss.outfit?'outfit':null].filter(Boolean)).map(sec=>{
+        ${(noAnswerYet?['flower','hair','outfit']:[needsFlower?'flower':null,needsHair?'hair':null,(ss.outfit||ss.outfitChosen)?'outfit':null].filter(Boolean)).map(sec=>{
           const lb={flower:'🌷 花束担当者',hair:'💄 ヘアメイク担当者',outfit:'👗 衣装担当者'};
           const url=`${base}?sid=${c.id}&section=${sec}`;
           const wasCopied=copied[sec];
