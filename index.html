@@ -66,8 +66,8 @@
   .cat-tab{padding:7px 16px;border-radius:20px;border:1.5px solid var(--border);background:var(--warm-white);font-family:'Noto Sans JP',sans-serif;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;transition:all .2s;}
   .cat-tab.active{border-color:var(--prop);background:var(--prop-light);color:var(--prop);}
   /* outfit grid */
-  .outfit-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
-  .outfit-card{position:relative;cursor:pointer;border-radius:10px;overflow:hidden;border:2px solid var(--border);transition:all .2s;}
+  .outfit-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+  .outfit-card{position:relative;cursor:pointer;border-radius:12px;overflow:hidden;border:1.5px solid var(--border);transition:all .2s;background:var(--warm-white);}
   .outfit-card.selected{border-color:var(--prop);box-shadow:0 0 0 2px var(--prop-light);}
   .outfit-img-wrap{aspect-ratio:3/4;background:#f0f0ec;display:flex;align-items:center;justify-content:center;overflow:hidden;}
   .outfit-img-wrap img{width:100%;height:100%;object-fit:cover;}
@@ -76,7 +76,9 @@
   .outfit-slides{display:flex;height:100%;transition:transform .3s ease;will-change:transform;}
   .outfit-slide{min-width:100%;width:100%;height:100%;flex-shrink:0;overflow:hidden;}
   .outfit-slide img{width:100%;height:100%;object-fit:cover;display:block;}
-  .outfit-label-text{padding:6px 8px;font-size:11px;color:var(--dark);background:var(--warm-white);text-align:center;line-height:1.4;word-break:break-all;}
+  .outfit-label-text{padding:10px 12px 14px;background:var(--warm-white);text-align:left;word-break:break-word;}
+  .outfit-label-name{font-size:12px;font-weight:500;color:var(--dark);line-height:1.5;letter-spacing:0.03em;display:block;margin-bottom:3px;}
+  .outfit-label-text .outfit-note{font-size:10px;font-weight:300;color:var(--muted);line-height:1.7;display:block;letter-spacing:0.02em;}
   .outfit-check{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:2px solid white;background:transparent;display:flex;align-items:center;justify-content:center;font-size:11px;color:white;transition:all .2s;}
   .outfit-card.selected .outfit-check{background:var(--prop);border-color:var(--prop);}
   .outfit-count-badge{position:absolute;top:6px;left:6px;width:20px;height:20px;border-radius:50%;background:var(--prop);color:white;font-size:10px;font-weight:500;display:none;align-items:center;justify-content:center;}
@@ -834,7 +836,7 @@ function renderOutfitContent(){
                 <button class="slider-btn prev" onclick="event.stopPropagation();slideOutfit('${o.id}',-1,${JSON.stringify([o.img,...(o.imgs?o.imgs.split(',').filter(x=>x):[])].filter(Boolean)).length})">‹</button>
                 <button class="slider-btn next" onclick="event.stopPropagation();slideOutfit('${o.id}',1,${JSON.stringify([o.img,...(o.imgs?o.imgs.split(',').filter(x=>x):[])].filter(Boolean)).length})">›</button>`:''})()}
             </div>
-            <div class="outfit-label-text" onclick="toggleOutfit('${o.id}')" style="cursor:pointer;user-select:none;">${o.name}${o.note?`<div style="font-size:10px;color:var(--muted);margin-top:2px;line-height:1.4">${o.note}</div>`:''}</div>
+            <div class="outfit-label-text" onclick="toggleOutfit('${o.id}')" style="cursor:pointer;user-select:none;"><span class="outfit-label-name">${o.name}</span>${o.note?`<span class="outfit-note">${o.note}</span>`:''}</div>
             <div class="outfit-check" onclick="toggleOutfit('${o.id}')" style="cursor:pointer;">✓</div>
             <div class="outfit-count-badge" id="ob-${o.id}">${outfitData.selected.indexOf(o.id)+1}</div>
           </div>`).join('')}</div>`
