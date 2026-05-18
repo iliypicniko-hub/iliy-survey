@@ -1187,7 +1187,7 @@ function buildAdminCard(c){
   const needsFlower=c.flowerOption&&c.flowerOption!=='none';
   const needsHair=c.hairOption&&c.hairOption!=='none';
   // お客様がまだオプション選択していない場合（sectionSentStatusが全て空）は全項目「未回答」
-  const noAnswerYet=!ss.flower&&!ss.hair&&!ss.outfit&&!ss.allNotNeeded;
+  const noAnswerYet=!ss.flower&&!ss.hair&&!ss.outfit&&!ss.outfitChosen&&!ss.outfitNotNeeded&&!ss.allNotNeeded;
   // 全オプション対象外（花束なし・ヘアメイクなし・衣装も不要）の場合はURL非表示
   const allNotNeeded=ss.allNotNeeded===true;
   const badge=allNotNeeded?'<span style="display:inline-block;background:#E8E0D5;color:#7A7570;font-size:10px;padding:2px 8px;border-radius:10px;margin-left:8px;">全対象外</span>':answered&&!c.completed?'<span class="badge-new">全回答済</span>':c.completed?'':!answered?'<span style="display:inline-block;background:#FEF3E2;color:#A05C00;border:1px solid #F5C26B;font-size:10px;padding:2px 8px;border-radius:10px;margin-left:8px;">回答待ち</span>':'';
