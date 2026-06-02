@@ -587,8 +587,8 @@ async function renderFlower(){
       <div class="error-msg" id="err-fl-mood">選択してください</div>
     </div>
     <div class="field">
-      <label>雰囲気の補足・その他ご希望<span class="opt">任意</span></label>
-      <textarea id="fl-note" placeholder="例：淡いピンク系が好き、グリーンを入れてほしい など">${flowerData.note||''}</textarea>
+      <label>備考<span class="opt">任意</span></label>
+      <textarea id="fl-note" placeholder="">${flowerData.note||''}</textarea>
     </div>
     <div class="nav"><button class="btn-back" onclick="renderSelector()">← 戻る</button><button class="btn-next" onclick="goFlower()">次へ　→</button></div>
   </div>`;
