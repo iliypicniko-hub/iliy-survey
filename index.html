@@ -562,8 +562,11 @@ function renderCommon(){
   // 全セクション完了チェック（お客様が選んだオプションに基づく）
   const needsFlower=customer.flowerOption&&customer.flowerOption!=='none';
   const needsHair=customer.hairOption&&customer.hairOption!=='none';
-  const allDone=(!needsFlower||sectionStatus.flower)&&(!needsHair||sectionStatus.hair)&&sectionStatus.outfit;
-  if(allDone&&(needsFlower||needsHair||sectionStatus.outfit)){
+  // 衣装: 回答済み or 不要選択 or 他のオプション回答済みで衣装未選択→完了とみなす
+  const outfitDone=sectionStatus.outfit||sectionStatus.outfitNotNeeded||
+    (!sectionStatus.outfitChosen&&!sectionStatus.outfit&&(needsFlower||needsHair)&&(sectionStatus.flower||sectionStatus.hair));
+  const allDone=(!needsFlower||sectionStatus.flower)&&(!needsHair||sectionStatus.hair)&&outfitDone;
+  if(allDone&&(needsFlower||needsHair||sectionStatus.outfit||outfitDone)){
     document.getElementById('form-main').innerHTML=`<div class="thankyou"><div class="thankyou-icon">✓</div><h2>すべての回答が完了しています</h2><p>${(SETTINGS.complete_message||'ご回答ありがとうございます。<br>当日お会いできるのを楽しみにしております。')}</p></div>`;
     return;
   }
@@ -1131,7 +1134,9 @@ function isAllAnswered(c){
   if(c.completed)return true;
   const needsFlower=c.flowerOption&&c.flowerOption!=='none';
   const needsHair=c.hairOption&&c.hairOption!=='none';
-  return(!needsFlower||ss.flower)&&(!needsHair||ss.hair)&&ss.outfit;
+  // 衣装: 利用する選択→回答済み、または利用しない選択→対象外どちらもOK
+  const outfitDone=ss.outfit||ss.outfitNotNeeded||(!ss.outfitChosen&&!ss.outfit&&(needsFlower||needsHair)&&(ss.flower||ss.hair));
+  return(!needsFlower||ss.flower)&&(!needsHair||ss.hair)&&outfitDone;
 }
 function getAlertDays(){return parseInt(SETTINGS.alert_days||'7',10);}
 function isUrgent(c){
