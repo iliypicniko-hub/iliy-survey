@@ -372,7 +372,7 @@
 </div>
 
 <script>
-const API='https://script.google.com/macros/s/AKfycbwHeyyigTzret7QPqlc5lNN_YUvRtJLNBVgLAoT8D2TL1gGaq1oGsn2P2MsFAqz2w_B6A/exec';
+const API='https://script.google.com/macros/s/AKfycbybOtyPXBtCa9Sluy1GYD8tqj7GfeOvNhzhCkBaut4xynceyq1WY8YtB4DSY3BfwFRFMg/exec';
 const CATEGORIES=['80cm','90cm','100cm','マタニティ'];
 
 async function apiPost(b){const r=await fetch(API,{method:'POST',body:JSON.stringify(b)});return r.json();}
@@ -533,6 +533,11 @@ async function startSections(){
 // ── 共通情報（最初に表示）──
 function renderCommon(){
   updateProgressEmpty();
+  // 全対象外の場合も完了画面を表示（再回答させない）
+  if(sectionStatus.allNotNeeded){
+    document.getElementById('form-main').innerHTML=`<div class="thankyou"><div class="thankyou-icon">✓</div><h2>ご回答ありがとうございます</h2><p>今回はオプションのご利用はないことを確認しました。<br><br>当日お会いできるのを楽しみにしております。</p></div>`;
+    return;
+  }
   // 全セクション完了チェック（お客様が選んだオプションに基づく）
   const needsFlower=customer.flowerOption&&customer.flowerOption!=='none';
   const needsHair=customer.hairOption&&customer.hairOption!=='none';
@@ -1268,6 +1273,23 @@ function buildAdminCard(c){
   </div>`;
 }
 
+async function resetAllOptions(cid,btn){
+  if(!confirm('全てのオプションをリセットします。\nお客様が最初からやり直せるようになります。'))return;
+  btn.disabled=true;btn.textContent='処理中…';
+  try{
+    const r=await adminPost({action:'resetAllOptions',cid});
+    if(r.ok){
+      const cx=allCustomers.find(x=>x.id===cid);
+      if(cx){
+        cx.sectionSentStatus={};
+        cx.flowerOption='none';
+        cx.hairOption='none';
+      }
+      alert('リセットしました。お客様に再度URLを送ってください。');
+      showAdminList(cx?.completed?'done':'pending');
+    }else{alert('リセットに失敗しました：'+(r.error||''));}
+  }catch(e){alert('エラーが発生しました。');}
+}
 async function resetSection(cid,section,btn){
   if(!confirm(`「${section==='flower'?'花束':section==='hair'?'ヘアメイク':'衣装'}」の回答をリセットしますか？\nお客様が再回答できるようになります。`))return;
   btn.disabled=true;btn.textContent='処理中…';
@@ -1391,6 +1413,7 @@ async function loadDetail(id){
         ${d.flower?`<button onclick="resetSection('${id}','flower',this)" style="padding:8px 12px;background:transparent;border:1px solid var(--error);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:11px;color:var(--error);cursor:pointer;">🌷 花束をリセット</button>`:''}
         ${d.hair?`<button onclick="resetSection('${id}','hair',this)" style="padding:8px 12px;background:transparent;border:1px solid var(--error);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:11px;color:var(--error);cursor:pointer;">💄 ヘアをリセット</button>`:''}
         ${d.outfit?`<button onclick="resetSection('${id}','outfit',this)" style="padding:8px 12px;background:transparent;border:1px solid var(--error);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:11px;color:var(--error);cursor:pointer;">👗 衣装をリセット</button>`:''}
+        <button onclick="resetAllOptions('${id}',this)" style="padding:8px 12px;background:transparent;border:1px solid var(--muted);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:11px;color:var(--muted);cursor:pointer;">🔄 全てリセット（対象外も解消）</button>
       </div>
 
     </div>`;
