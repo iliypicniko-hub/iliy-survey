@@ -456,9 +456,17 @@ async function initClient(id){
 async function renderSelector(){
   if(!settingsLoaded)await loadSettings();
   // 前回の選択を復元するためのデフォルト値を取得
-  const prevFlower=customer.flowerOption&&customer.flowerOption!=='none'?'花束を注文している':(customer.flowerOption==='none'&&(customer.sectionSentStatus?.flower||customer.sectionSentStatus?.hair||customer.sectionSentStatus?.outfitChosen))?'花束を注文していない':'';
-  const prevHair=customer.hairOption==='female'?'女性ヘアセット＆メイク':customer.hairOption==='male'?'男性ヘアセット':customer.hairOption==='both'?'両方（女性＋男性）':(customer.hairOption==='none'&&(customer.sectionSentStatus?.flower||customer.sectionSentStatus?.outfit||customer.sectionSentStatus?.outfitChosen))?'ヘアメイクなし':'';
-  const prevOutfit=customer.sectionSentStatus?.outfitChosen?'衣装レンタルを利用する':customer.sectionSentStatus?.outfitNotNeeded?'衣装レンタルは利用しない':'';
+  // 送信済みの場合は送信済みの選択を強制
+  const prevFlower=sectionStatus.flower?'花束を注文している':
+    customer.flowerOption&&customer.flowerOption!=='none'?'花束を注文している':
+    (customer.flowerOption==='none'&&(sectionStatus.hair||sectionStatus.outfitChosen))?'花束を注文していない':'';
+  const prevHair=sectionStatus.hair?
+    (customer.hairOption==='female'?'女性ヘアセット＆メイク':customer.hairOption==='male'?'男性ヘアセット':customer.hairOption==='both'?'両方（女性＋男性）':'ヘアメイクなし'):
+    customer.hairOption==='female'?'女性ヘアセット＆メイク':customer.hairOption==='male'?'男性ヘアセット':customer.hairOption==='both'?'両方（女性＋男性）':
+    (customer.hairOption==='none'&&(sectionStatus.flower||sectionStatus.outfitChosen))?'ヘアメイクなし':'';
+  const prevOutfit=sectionStatus.outfit?'衣装レンタルを利用する':
+    sectionStatus.outfitChosen?'衣装レンタルを利用する':
+    sectionStatus.outfitNotNeeded?'衣装レンタルは利用しない':'';
   updateProgressEmpty();
   const m=document.getElementById('form-main');
   m.innerHTML=`<div class="fade-in">
@@ -467,29 +475,31 @@ async function renderSelector(){
     <div class="field">
       <label>花束オプション<span class="req">必須</span>${SETTINGS.flower_detail?`<button type="button" onclick="showOptionDetail('flower')" style="margin-left:8px;padding:2px 10px;background:var(--flower-light);border:1px solid var(--flower-border);border-radius:10px;font-family:'Noto Sans JP',sans-serif;font-size:10px;color:var(--flower);cursor:pointer;">詳細を見る</button>`:''}
       </label>
-      ${rg('has-flower',['花束を注文している','花束を注文していない'],'col1',sectionStatus.flower,prevFlower)}
+      ${rg('has-flower',['花束を注文している','花束を注文していない'],'col1',sectionStatus.flower,prevFlower,sectionStatus.flower)}
       <div class="error-msg" id="err-flower">選択してください</div>
     </div>
     <div class="field">
       <label>ヘアメイクオプション<span class="req">必須</span>${SETTINGS.hair_detail?`<button type="button" onclick="showOptionDetail('hair')" style="margin-left:8px;padding:2px 10px;background:#FBEAF0;border:1px solid #ED93B1;border-radius:10px;font-family:'Noto Sans JP',sans-serif;font-size:10px;color:#993556;cursor:pointer;">詳細を見る</button>`:''}
       </label>
-      ${rg('has-hair',['女性ヘアセット＆メイク','男性ヘアセット','両方（女性＋男性）','ヘアメイクなし'],'col1',sectionStatus.hair,prevHair)}
+      ${rg('has-hair',['女性ヘアセット＆メイク','男性ヘアセット','両方（女性＋男性）','ヘアメイクなし'],'col1',sectionStatus.hair,prevHair,sectionStatus.hair)}
       <div class="error-msg" id="err-hair">選択してください</div>
     </div>
     <div class="field">
       <label>衣装レンタルオプション<span class="req">必須</span>${SETTINGS.outfit_detail?`<button type="button" onclick="showOptionDetail('outfit')" style="margin-left:8px;padding:2px 10px;background:var(--prop-light);border:1px solid var(--prop-border);border-radius:10px;font-family:'Noto Sans JP',sans-serif;font-size:10px;color:var(--prop);cursor:pointer;">詳細を見る</button>`:''}
       </label>
-      ${rg('has-outfit',['衣装レンタルを利用する','衣装レンタルは利用しない'],'col1',sectionStatus.outfit,prevOutfit)}
+      ${rg('has-outfit',['衣装レンタルを利用する','衣装レンタルは利用しない'],'col1',sectionStatus.outfit,prevOutfit,sectionStatus.outfit||sectionStatus.outfitChosen||sectionStatus.outfitNotNeeded)}
       <div class="error-msg" id="err-outfit">選択してください</div>
     </div>
     <div class="nav"><button class="btn-back" onclick="renderCommon()">← 戻る</button><button class="btn-next" onclick="startSections()">次へ　→</button></div>
   </div>`;
 }
 
-function rg(name,opts,col,locked,prevVal){
+function rg(name,opts,col,locked,prevVal,hardLock){
+  // hardLock: 送信済みのためoperations全体をロック（変更不可）
+  const isLocked=locked||hardLock;
   const note=locked?'<span style="color:var(--success);font-size:11px;margin-left:6px">✓ 送信済み</span>':'';
-  return note+`<div class="radio-grid ${col||''}" style="${locked?'opacity:.5;pointer-events:none;':''}">`+
-    opts.map(o=>`<label class="choice-card"><input type="radio" name="${name}" value="${o}"${locked?' disabled':''}${!locked&&prevVal===o?' checked':''}><div class="choice-label"><div class="choice-dot"></div>${o}</div></label>`).join('')+'</div>';
+  return note+`<div class="radio-grid ${col||''}" style="${isLocked?'opacity:.6;pointer-events:none;':''}">`+
+    opts.map(o=>`<label class="choice-card"><input type="radio" name="${name}" value="${o}"${isLocked?' disabled':''}${(isLocked||!locked)&&prevVal===o?' checked':''}><div class="choice-label"><div class="choice-dot"></div>${o}</div></label>`).join('')+'</div>';
 }
 
 async function startSections(){
@@ -503,6 +513,17 @@ async function startSections(){
   if(!hair&&!sectionStatus.hair)show('err-hair');else hide('err-hair');
   if(!outfit&&!sectionStatus.outfit)show('err-outfit');else hide('err-outfit');
   if(!ok)return;
+
+  // 送信済みセクションがあるのに「利用しない」に変更しようとした場合はブロック
+  if(sectionStatus.flower&&flower==='花束を注文していない'){
+    alert('花束はすでに回答済みのため変更できません。');return;
+  }
+  if(sectionStatus.hair&&(hair==='ヘアメイクなし')){
+    alert('ヘアメイクはすでに回答済みのため変更できません。');return;
+  }
+  if(sectionStatus.outfit&&outfit==='衣装レンタルは利用しない'){
+    alert('衣装レンタルはすでに回答済みのため変更できません。');return;
+  }
   // オプション内容をGASのcustomersシートに保存
   const flowerOpt=flower==='花束を注文している'?'flower':'none';
   const hairOpt=hair==='女性ヘアセット＆メイク'?'female':hair==='男性ヘアセット'?'male':hair==='両方（女性＋男性）'?'both':'none';
