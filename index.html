@@ -54,10 +54,23 @@
   .radio-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
   .radio-grid.col1{grid-template-columns:1fr;}
   .radio-grid.col3{grid-template-columns:1fr 1fr 1fr;}
+  .kind-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .kind-card .kind-img{aspect-ratio:3/4;background:#f0f0ec;border-radius:10px 10px 0 0;overflow:hidden;position:relative;cursor:zoom-in;}
+  .kind-card .kind-img img{width:100%;height:100%;object-fit:cover;display:block;}
+  .kind-card .kind-img .kind-more{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;}
+  .kind-card .choice-label{border-radius:0 0 10px 10px;}
+  .kind-card.nophoto .choice-label{border-radius:10px;}
+  .fi-slot{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--warm-white);}
+  .fi-thumbs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;}
+  .fi-thumb{position:relative;width:72px;height:96px;border-radius:6px;overflow:hidden;background:#f0f0ec;}
+  .fi-thumb img{width:100%;height:100%;object-fit:cover;}
+  .fi-thumb button{position:absolute;top:2px;right:2px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;font-size:12px;}
   .choice-card{position:relative;cursor:pointer;}
   .choice-card input{position:absolute;opacity:0;width:0;height:0;}
   .choice-label{display:flex;align-items:center;gap:9px;padding:11px 13px;background:var(--warm-white);border:1px solid var(--border);border-radius:8px;font-size:13px;transition:all .2s;cursor:pointer;line-height:1.4;}
   .choice-card input:checked+.choice-label{border-color:var(--accent);background:var(--accent-light);}
+  .choice-card.chk .choice-dot{border-radius:4px;}
+  .choice-card.chk input:checked+.choice-label .choice-dot::after{border-radius:1px;}
   .choice-dot{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--border);flex-shrink:0;transition:all .2s;display:flex;align-items:center;justify-content:center;}
   .choice-card input:checked+.choice-label .choice-dot{border-color:var(--accent);background:var(--accent);}
   .choice-card input:checked+.choice-label .choice-dot::after{content:'';width:5px;height:5px;border-radius:50%;background:white;}
@@ -324,10 +337,18 @@
   <div class="admin-tabs">
     <button class="admin-tab active" id="tab-customers" onclick="switchAdminTab('customers')">📋 回答一覧</button>
     <button class="admin-tab" id="tab-upload" onclick="switchAdminTab('upload')">📷 衣装画像</button>
+    <button class="admin-tab" id="tab-flowerimg" onclick="switchAdminTab('flowerimg')">🌷 お花画像</button>
     <button class="admin-tab" id="tab-settings" onclick="switchAdminTab('settings')">⚙️ 設定</button>
   </div>
   <div id="admin-tab-customers">
     <div class="admin-wrap" id="admin-wrap"><div class="loading-box">読み込み中…</div></div>
+  </div>
+  <div id="admin-tab-flowerimg" style="display:none">
+    <div class="upload-tab-wrap">
+      <div class="page-heading" style="margin-bottom:6px">お花の写真（造花）</div>
+      <div class="page-desc">造花の完成品の写真を登録します。お客様が種類を選ぶ画面に表示されます（1種類につき最大4枚。タップで拡大できます）。写真を追加・削除すると、すぐに反映されます。</div>
+      <div id="flowerimg-body"><div class="loading-box">読み込み中…</div></div>
+    </div>
   </div>
   <div id="admin-tab-settings" style="display:none">
     <div class="upload-tab-wrap" id="settings-wrap">
@@ -373,6 +394,107 @@
 
 <script>
 const API='https://script.google.com/macros/s/AKfycbybOtyPXBtCa9Sluy1GYD8tqj7GfeOvNhzhCkBaut4xynceyq1WY8YtB4DSY3BfwFRFMg/exec';
+// 花束セクションで選んでもらうアイテム（社内発注フォームと同じ内容）
+// 花束オプションの種類：none／fresh（生花）／artificial（造花）／both（両方）。古いデータの 'flower' は「両方」
+const hasFlowerOpt=o=>['fresh','artificial','both','flower'].includes(o);
+const hasFreshOpt=o=>['fresh','both','flower'].includes(o);
+const FLOWER_OPT_LABEL={none:'なし',fresh:'生花',artificial:'造花',both:'生花と造花の両方',flower:'生花と造花の両方'};
+const flowerItemsFor=o=>FLOWER_ITEMS.filter(i=>o==='fresh'?i.includes('生花'):o==='artificial'?i.includes('造花'):true);
+const FLOWER_ITEMS=['生花ミニブーケ 5,500円（税込）','生花アレンジ（2個） 27,500円（税込）','造花アレンジ（2個）＋ミニブーケ 16,500円（税込）','造花ミニブーケ 3,300円（税込）'];
+// ★種類（複数選択可）。どのアイテムを選んだ場合も、この5つから選んでもらう
+const KIND_OPTIONS=['Simple','Natural','Cute','Cool','rihのお任せ'];
+// 造花は完成品が4種類（「おまかせ」なし）。写真を見ながら選んでもらう（写真は管理画面「お花画像」から登録）
+const FLOWER_NOTICE_ART_DEFAULT='🌸 rihでの花束をご希望ありがとうございます✨<br>造花の完成品の中から、お好みの種類をお選びください。写真をタップすると拡大できます。';
+const ART_KINDS=['シンプル','ソフト','ニュアンス'];
+const isArtItem=o=>String(o).includes('造花');
+const isSetItem=o=>isArtItem(o)&&String(o).includes('アレンジ'); // 造花アレンジ＋ミニブーケのセット（アレンジとミニブーケで別々に種類を選ぶ）
+const ART_MINI_IDX=()=>FLOWER_ITEMS.findIndex(x=>isArtItem(x)&&!isSetItem(x)); // ミニブーケの写真は、単品とセットで共通
+const SET_KIND_RE=/^アレンジ：(.+)／ミニブーケ：(.+)$/;
+const kindsFor=o=>isArtItem(o)?ART_KINDS:KIND_OPTIONS;
+const fiKey=(idx,kind)=>'flower_img_'+idx+'_'+kind;
+const fiList=(idx,kind)=>String((typeof SETTINGS!=='undefined'&&SETTINGS[fiKey(idx,kind)])||'').split(',').filter(Boolean);
+const ORDER_SOURCES=['iliy大阪','iliy東京'];
+const ORDER_THEMES=['マタニティ','お宮参り','ハーフバースデー','1歳BD','2歳BD','3歳七五三','5歳七五三','7歳七五三','家族写真','その他'];
+const ORDER_DELIVERY=['大阪スタジオへ搬入','ヤマト営業所止め（発送）','東京スタジオへ発送'];
+
+// ── 受付ルール（撮影日から判定）──
+// 受付できる撮影曜日（0=日 … 6=土）。祝日は曜日を問わず受付。これ以外の曜日は造花プランをご案内
+const ACCEPT_DAYS={'iliy大阪':{days:[5,6,0,1],label:'金・土・日・月'},'iliy東京':{days:[6,0,1],label:'土・日・月'}};
+// 締切：大阪スタジオ搬入＝撮影の4日前まで／発送（営業所止め・東京スタジオ）＝撮影の6日前まで
+const DEADLINE_DAYS=delivery=>/大阪スタジオ/.test(delivery||'')?4:6;
+// 花材の仕入れ＝撮影の3日前。この日以降（当日を含む）は変更不可
+const PURCHASE_LOCK_DAYS=3;
+const WD=['日','月','火','水','木','金','土'];
+function jstToday(){return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Tokyo'});}
+function ymdNum(s){const a=s.split('-');return Date.UTC(+a[0],+a[1]-1,+a[2]);}
+function daysUntil(ymd){if(!/^\d{4}-\d{2}-\d{2}$/.test(ymd||''))return null;return Math.round((ymdNum(ymd)-ymdNum(jstToday()))/86400000);}
+// 花束なし（スタッフ選択済み）のお客様は、仕入れ後でもロックしない
+// 撮影3日前以降の生花の変更・リセットは、rihへの確認が必要（確認ポップアップ。「続ける」で実行できる）
+async function rihConfirm(c,what){
+  return await noticeDialog({title:'rihへの確認が必要です',items:['撮影日（'+fmtD(c.shootDate)+'）の'+PURCHASE_LOCK_DAYS+'日前以降のため、花材の仕入れが済んでいる可能性があります。',what+'の前に、rih担当者に確認してください。'],okText:'rihに確認した・続ける',cancelText:'やめる'});
+}
+let lateNoticed=false;
+async function lateNotice(){
+  if(lateNoticed)return;lateNoticed=true;
+  await noticeDialog({title:'ご確認ください',items:['撮影の'+PURCHASE_LOCK_DAYS+'日前以降のため、花材の仕入れがすでに済んでいる場合があります。','ご回答は受け付けますが、ご希望の内容に添えない場合があります。スタジオが確認のうえ、必要に応じてご連絡します。'],okText:'確認して回答に進む'});
+}
+function lockedC(c){
+  const st=c.sectionSentStatus||{};
+  if(st.optionsFixed&&!hasFreshOpt(c.flowerOption))return false; // 花束なし・造花のみは、仕入れ後でもロックしない
+  return isLockedYmd(c.shootDate);
+}
+function isLockedYmd(ymd){const d=daysUntil(ymd);return d!==null&&d<=PURCHASE_LOCK_DAYS;}
+// 日本の祝日（振替休日・国民の休日を含む。2023年以降を想定）
+function _nthMon(y,m,n){const f=new Date(Date.UTC(y,m-1,1)).getUTCDay();return 1+((8-f)%7)+(n-1)*7;}
+function _baseHoliday(y,m,d){
+  const eq=k=>Math.floor(k+0.242194*(y-1980)-Math.floor((y-1980)/4));
+  if([[1,1],[2,11],[2,23],[4,29],[5,3],[5,4],[5,5],[8,11],[11,3],[11,23]].some(x=>x[0]===m&&x[1]===d))return true;
+  if(m===1&&d===_nthMon(y,1,2))return true;   // 成人の日
+  if(m===7&&d===_nthMon(y,7,3))return true;   // 海の日
+  if(m===9&&d===_nthMon(y,9,3))return true;   // 敬老の日
+  if(m===10&&d===_nthMon(y,10,2))return true; // スポーツの日
+  if(m===3&&d===eq(20.8431))return true;      // 春分の日
+  if(m===9&&d===eq(23.2488))return true;      // 秋分の日
+  return false;
+}
+function isJpHoliday(ymd){
+  const a=ymd.split('-').map(Number),y=a[0],m=a[1],d=a[2];
+  const at=k=>{const t=new Date(Date.UTC(y,m-1,d+k));return[t.getUTCFullYear(),t.getUTCMonth()+1,t.getUTCDate(),t.getUTCDay()];};
+  if(_baseHoliday(y,m,d))return true;
+  for(let k=1;k<=7;k++){const p=at(-k);if(!_baseHoliday(p[0],p[1],p[2]))break;if(p[3]===0)return true;} // 振替休日
+  const pv=at(-1),nx=at(1);
+  return _baseHoliday(pv[0],pv[1],pv[2])&&_baseHoliday(nx[0],nx[1],nx[2]);                            // 国民の休日
+}
+// 撮影日・発注元・受渡方法から、注意が必要な点を文章の配列で返す
+function checkOrderRules(ymd,source,delivery){
+  const out=[];const dd=daysUntil(ymd);if(dd===null)return out;
+  const dow=new Date(ymdNum(ymd)).getUTCDay();
+  const label=`${+ymd.slice(5,7)}/${+ymd.slice(8,10)}（${WD[dow]}）`;
+  const rule=ACCEPT_DAYS[source];
+  if(rule&&!rule.days.includes(dow)&&!isJpHoliday(ymd))
+    out.push(`撮影日 ${label} は、${source}の受付曜日（${rule.label}・祝日）ではありません。上記以外の曜日の撮影は、造花プランをご案内ください。`);
+  const need=DEADLINE_DAYS(delivery);
+  if(dd<need){
+    out.push(`受渡方法「${delivery}」の締切は撮影の${need}日前までです。`+(dd<0?'撮影日がすでに過ぎています。':dd===0?'撮影は本日です。':`撮影日（${label}）まであと${dd}日で、締切を過ぎています。`)+`花材の仕入れが撮影の${PURCHASE_LOCK_DAYS}日前のため、これを過ぎるとお受けできません。`);
+  }
+  if(dd<=PURCHASE_LOCK_DAYS)out.push(`撮影の${PURCHASE_LOCK_DAYS}日前以降のため、花材の仕入れが済んでいる可能性があります。rihに確認してから進めてください（お客様の回答画面にも注意が出ますが、回答はできます）。`);
+  return out;
+}
+// 注意画面（警告）。okText＋cancelText＝選べる警告／okTextだけ＝閉じるだけの警告。true＝続ける
+function noticeDialog({title,items,okText,cancelText,altText}){
+  return new Promise(res=>{
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+    const bs='flex:1;padding:11px;border-radius:8px;font-family:inherit;font-size:13px;cursor:pointer;';
+    ov.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:22px 20px;max-height:85vh;overflow:auto;font-family:'Noto Sans JP',sans-serif">
+      <div style="font-size:16px;font-weight:500;color:var(--error);margin-bottom:12px">⚠️ ${escH(title)}</div>
+      <div style="font-size:13px;line-height:1.8;color:var(--dark)">${(items||[]).map(t=>`<div style="background:#FDECEA;border-left:3px solid var(--error);padding:8px 10px;border-radius:6px;margin-bottom:8px">${escH(t)}</div>`).join('')}</div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">${altText?`<button data-v="2" style="${bs}flex-basis:100%;background:var(--accent);color:#fff;border:none">${escH(altText)}</button>`:''}${cancelText?`<button data-v="0" style="${bs}background:var(--dark);color:#fff;border:none">${escH(cancelText)}</button>`:''}<button data-v="1" style="${bs}${cancelText?'background:#fff;color:var(--error);border:1px solid var(--error)':'background:var(--dark);color:#fff;border:none'}">${escH(okText||'閉じる')}</button></div></div>`;
+    ov.onclick=e=>{const b=e.target.closest('button');if(!b)return;ov.remove();res(b.dataset.v==='1'?true:b.dataset.v==='2'?'alt':false);};
+    document.body.appendChild(ov);
+  });
+}
+const escH=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const CATEGORIES=['80cm','90cm','100cm','マタニティ'];
 
 async function apiPost(b){const r=await fetch(API,{method:'POST',body:JSON.stringify(b)});return r.json();}
@@ -454,6 +576,7 @@ async function initClient(id){
 }
 
 async function renderSelector(){
+  if(sectionStatus.optionsFixed){renderCommon();return;}
   if(!settingsLoaded)await loadSettings();
   // 前回の選択を復元するためのデフォルト値を取得
   // 送信済みの場合は送信済みの選択を強制
@@ -524,6 +647,8 @@ async function startSections(){
   if(sectionStatus.outfit&&outfit==='衣装レンタルは利用しない'){
     alert('衣装レンタルはすでに回答済みのため変更できません。');return;
   }
+  // 撮影の3日前以降は、注意を出すだけ（回答はできる）
+  if(customer.locked&&flower==='花束を注文している'&&!sectionStatus.flower)await lateNotice();
   // オプション内容をGASのcustomersシートに保存
   const flowerOpt=flower==='花束を注文している'?'flower':'none';
   const hairOpt=hair==='女性ヘアセット＆メイク'?'female':hair==='男性ヘアセット'?'male':hair==='両方（女性＋男性）'?'both':'none';
@@ -591,7 +716,21 @@ function renderCommon(){
 function goCommon(){
   commonData.name=customer.name||'';
   commonData.shootDate=customer.shootDate||'';
-  renderSelector();
+  if(sectionStatus.optionsFixed)startFixed();else renderSelector();
+}
+// スタッフがURL発行時にオプションを選んでいる場合：オプション選択画面を出さず、選ばれた項目の回答欄だけを表示する
+async function startFixed(){
+  sectionsToFill=[];
+  if(hasFlowerOpt(customer.flowerOption)&&!sectionStatus.flower)sectionsToFill.push('flower');
+  const hairOpt=customer.hairOption||'none';
+  if(hairOpt!=='none'&&!sectionStatus.hair){sectionsToFill.push('hair');hairOptionType=hairOpt;}
+  if(sectionStatus.outfitChosen&&!sectionStatus.outfit)sectionsToFill.push('outfit');
+  if(customer.locked&&sectionsToFill.includes('flower'))await lateNotice();
+  if(!sectionsToFill.length){
+    document.getElementById('form-main').innerHTML='<div class="thankyou"><div class="thankyou-icon">✓</div><h2>ご回答ありがとうございます</h2><p>今回ご回答いただく項目はありません。</p></div>';
+    return;
+  }
+  currentSection=sectionsToFill[0];currentStep=0;renderCurrentSection();
 }
 function renderCurrentSection(){
   if(currentSection==='flower')renderFlower();
@@ -605,19 +744,21 @@ async function renderFlower(){
   if(!settingsLoaded) await loadSettings();
   updateProgressFlow('flower');
   const s=flowerStepList[currentStep];
+  const artOnly=!!sectionStatus.optionsFixed&&customer.flowerOption==='artificial'; // 造花のみ：生花向けの注意書きは出さない
   const m=document.getElementById('form-main');
   if(s==='fl-main')m.innerHTML=`<div class="fade-in">
     <div class="section-badge flower">🌷 花束オプション</div>
     <div class="page-heading">花束のご要望</div>
-    <div class="notice-box" style="${noticeStyle(SETTINGS.flower_notice_color||'pink')}">${SETTINGS.flower_notice||'🌸 rihでの花束をご希望ありがとうございます✨<br>お客様の雰囲気にあった花束をお作りします。※細かいお花のご指定はできかねますのでご了承ください🙇'}</div>
+    <div class="notice-box" style="${noticeStyle(artOnly?(SETTINGS.flower_notice_art_color||'pink'):(SETTINGS.flower_notice_color||'pink'))}">${artOnly?(SETTINGS.flower_notice_art||FLOWER_NOTICE_ART_DEFAULT):`${SETTINGS.flower_notice||'🌸 rihでの花束をご希望ありがとうございます✨<br>お客様の雰囲気にあった花束をお作りします。※細かいお花のご指定はできかねますのでご了承ください🙇'}`}</div>
     <div class="field">
-      <label>ご希望の雰囲気<span class="req">必須</span></label>
-      ${radioGroup('fl-mood',['rihへお任せ','シンプル','ナチュラル','キュート','クール'],2)}
-      <div class="error-msg" id="err-fl-mood">選択してください</div>
+      <label>アイテム<span class="req">必須</span><span class="opt" style="margin-left:6px">複数選択可</span></label>
+      <div class="radio-grid col1">${flowerItemsFor(sectionStatus.optionsFixed?customer.flowerOption:'both').map(o=>`<label class="choice-card chk"><input type="checkbox" name="fl-item" value="${escH(o)}"${(flowerData.items||[]).some(x=>x.item===o)?' checked':''} onchange="renderKindFields()"><div class="choice-label"><div class="choice-dot"></div>${escH(o)}</div></label>`).join('')}</div>
+      <div class="error-msg" id="err-fl-item">選択してください</div>
     </div>
+    <div id="fl-art-wrap"></div>
     <div class="field">
       <label>備考<span class="opt">任意</span></label>
-      <textarea id="fl-note" placeholder="">${flowerData.note||''}</textarea>
+      <textarea id="fl-note" placeholder="">${escH(flowerData.note||'')}</textarea>
     </div>
     <div class="nav"><button class="btn-back" onclick="renderSelector()">← 戻る</button><button class="btn-next" onclick="goFlower()">次へ　→</button></div>
   </div>`;
@@ -635,22 +776,103 @@ async function renderFlower(){
     <div class="confirm-block"><div class="confirm-block-title flower">花束ご要望</div>
       <div class="confirm-row"><div class="confirm-key">お名前</div><div class="confirm-val">${commonData.name}</div></div>
       <div class="confirm-row"><div class="confirm-key">撮影日</div><div class="confirm-val">${fmtD(commonData.shootDate)}</div></div>
-      <div class="confirm-row"><div class="confirm-key">雰囲気</div><div class="confirm-val">${flowerData.mood||''}</div></div>
-      ${flowerData.note?`<div class="confirm-row"><div class="confirm-key">補足</div><div class="confirm-val">${flowerData.note}</div></div>`:''}
+      ${(flowerData.items||[]).map(x=>`<div class="confirm-row"><div class="confirm-key">アイテム</div><div class="confirm-val">${escH(x.item)}<br><span style="color:var(--muted)">種類：</span>${escH(x.kind)}</div></div>`).join('')}
+      ${flowerData.note?`<div class="confirm-row"><div class="confirm-key">備考</div><div class="confirm-val">${escH(flowerData.note)}</div></div>`:''}
       <div class="confirm-row"><div class="confirm-key">普段の写真</div><div class="confirm-val">${PS['fl-person'].length}枚</div></div>
       <div class="confirm-row"><div class="confirm-key">衣装写真</div><div class="confirm-val">${PS['fl-outfit'].length}枚</div></div>
     </div>
     <div class="nav"><button class="btn-back" onclick="currentStep--;renderFlower()">← 戻る</button><button class="btn-submit" id="btn-submit" onclick="submitSection('flower')">送信する</button></div>
   </div>`;
   window.scrollTo({top:0,behavior:'smooth'});
+  if(s==='fl-main')renderKindFields();
   ['fl-person','fl-outfit'].forEach(k=>renderPreviews(k));
+}
+// 選んだアイテムごとに、「種類」（1つ選択・必須）を表示する
+// 保存済みの花束回答 → [{item,kind}]（古い形式にも対応）
+function flItems(f){return(f&&f.items&&f.items.length)?f.items:((f&&f.item)?[{item:f.item,kind:f.kinds||f.mood||''}]:[]);}
+function renderKindFields(){
+  const wrap=document.getElementById('fl-art-wrap');if(!wrap)return;
+  const onScreen=document.querySelector('input[name="fl-item"]')!==null;
+  const checked=o=>onScreen?[...document.querySelectorAll('input[name="fl-item"]')].some(e=>e.value===o&&e.checked):(flowerData.items||[]).some(x=>x.item===o);
+  const prevKind=(o,idx)=>{
+    const dom=document.querySelector(`input[name="fl-kind-${idx}"]:checked`);
+    if(dom)return dom.value;
+    const f=(flowerData.items||[]).find(x=>x.item===o);return f?f.kind:'';
+  };
+  const freshChecked=FLOWER_ITEMS.map((o,idx)=>({o,idx})).filter(x=>!isArtItem(x.o)&&checked(x.o));
+  const shared=freshChecked.length>1; // 生花を2つとも選んだ場合は、種類を1つに統一する
+  const radios=(name,list,pk)=>`<div class="radio-grid col1">${list.map(k=>`<label class="choice-card"><input type="radio" name="${name}" value="${escH(k)}"${pk===k?' checked':''}><div class="choice-label"><div class="choice-dot"></div>${escH(k)}</div></label>`).join('')}</div>`;
+  const normK=k=>k==='Leave it to rih'?'rihのお任せ':k;
+  const artGrid=(name,photoIdx,pk)=>`<div class="kind-grid">${ART_KINDS.map(k=>{const imgs=fiList(photoIdx,k);return`<label class="choice-card kind-card${imgs.length?'':' nophoto'}">${imgs.length?`<div class="kind-img" onclick="event.preventDefault();event.stopPropagation();openOutfitLightbox(null,${escH(JSON.stringify(imgs))},0)"><img src="${escH(imgs[0])}" alt="${escH(k)}" loading="lazy" onerror="this.parentElement.style.display='none'">${imgs.length>1?`<span class="kind-more">写真 ${imgs.length}枚</span>`:''}</div>`:''}<input type="radio" name="${name}" value="${escH(k)}"${pk===k?' checked':''}><div class="choice-label"><div class="choice-dot"></div>${escH(k)}</div></label>`;}).join('')}</div>`;
+  let sharedHtml='';
+  if(shared){
+    const dom=document.querySelector('input[name="fl-kind-fresh"]:checked');
+    const saved=(flowerData.items||[]).find(x=>!isArtItem(x.item)&&x.kind);
+    const pk=normK(dom?dom.value:(saved?saved.kind:''));
+    sharedHtml=`<div class="field"><label>${freshChecked.map(x=>escH(x.o)).join('<br>＋ ')}<br>の種類<span class="req">必須</span></label>
+      <div style="font-size:11px;color:var(--muted);margin:2px 0 8px">※生花のアレンジとミニブーケは、同じ種類でお作りします（1つお選びください）</div>
+      ${radios('fl-kind-fresh',KIND_OPTIONS,pk)}
+      <div class="error-msg" id="err-fl-kind-fresh">選択してください</div></div>`;
+  }
+  const rest=  FLOWER_ITEMS.map((o,idx)=>{
+    if(!checked(o))return'';
+    if(shared&&!isArtItem(o))return'';
+    if(isSetItem(o)){ // セット：アレンジとミニブーケで、別々に種類を選ぶ
+      const saved=(flowerData.items||[]).find(x=>x.item===o);const m=saved&&String(saved.kind).match(SET_KIND_RE);
+      const dv=n=>document.querySelector(`input[name="${n}"]:checked`)?.value||'';
+      const pa=dv('fl-kind-'+idx+'a')||(m?m[1]:''),pb=dv('fl-kind-'+idx+'b')||(m?m[2]:'');
+      return`<div class="field"><label>${escH(o)} の種類<span class="req">必須</span></label>
+        <div style="font-size:12px;color:var(--muted);margin:2px 0 6px">アレンジ（2個）の種類</div>
+        ${artGrid('fl-kind-'+idx+'a',idx,pa)}
+        <div class="error-msg" id="err-fl-kind-${idx}a">選択してください</div>
+        <div style="font-size:12px;color:var(--muted);margin:14px 0 6px">ミニブーケの種類</div>
+        ${artGrid('fl-kind-'+idx+'b',ART_MINI_IDX(),pb)}
+        <div class="error-msg" id="err-fl-kind-${idx}b">選択してください</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">※アレンジとミニブーケは、別々の種類を選べます。写真をタップで拡大／下の名前をタップで選択</div></div>`;
+    }
+    const pk0=prevKind(o,idx);const pk=pk0==='Leave it to rih'?'rihのお任せ':pk0; // 以前の表記も同じ選択肢として扱う
+    const art=isArtItem(o);
+    const body=art
+      ?`<div class="kind-grid">${kindsFor(o).map(k=>{const imgs=fiList(idx,k);return`<label class="choice-card kind-card${imgs.length?'':' nophoto'}">${imgs.length?`<div class="kind-img" onclick="event.preventDefault();event.stopPropagation();openOutfitLightbox(null,${escH(JSON.stringify(imgs))},0)"><img src="${escH(imgs[0])}" alt="${escH(k)}" loading="lazy" onerror="this.parentElement.style.display='none'">${imgs.length>1?`<span class="kind-more">写真 ${imgs.length}枚</span>`:''}</div>`:''}<input type="radio" name="fl-kind-${idx}" value="${escH(k)}"${pk===k?' checked':''}><div class="choice-label"><div class="choice-dot"></div>${escH(k)}</div></label>`;}).join('')}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">※写真をタップで拡大／下の名前をタップで選択</div>`
+      :`<div class="radio-grid col1">${kindsFor(o).map(k=>`<label class="choice-card"><input type="radio" name="fl-kind-${idx}" value="${escH(k)}"${pk===k?' checked':''}><div class="choice-label"><div class="choice-dot"></div>${escH(k)}</div></label>`).join('')}</div>`;
+    return`<div class="field"><label>${escH(o)} の種類<span class="req">必須</span></label>
+      ${body}
+      <div class="error-msg" id="err-fl-kind-${idx}">選択してください</div></div>`;
+  }).join('');
+  wrap.innerHTML=sharedHtml+rest;
 }
 function goFlower(){
   if(currentStep===0){
-    flowerData.mood=document.querySelector('input[name="fl-mood"]:checked')?.value||flowerData.mood||'';
     flowerData.note=document.getElementById('fl-note')?.value||'';
-    if(!flowerData.mood){document.getElementById('err-fl-mood')?.classList.add('show');return;}
-    document.getElementById('err-fl-mood')?.classList.remove('show');
+    const items=[];let kindNg=false;
+    const onItems=FLOWER_ITEMS.filter(o=>[...document.querySelectorAll('input[name="fl-item"]')].some(e=>e.value===o&&e.checked));
+    const sharedFresh=onItems.filter(o=>!isArtItem(o)).length>1; // 生花を2つ選んだ場合は、種類を1つに統一
+    const sharedKind=document.querySelector('input[name="fl-kind-fresh"]:checked')?.value||'';
+    if(sharedFresh){document.getElementById('err-fl-kind-fresh')?.classList.toggle('show',!sharedKind);if(!sharedKind)kindNg=true;}
+    FLOWER_ITEMS.forEach((o,idx)=>{
+      if(!onItems.includes(o))return;
+      if(sharedFresh&&!isArtItem(o)){items.push({item:o,kind:sharedKind});return;}
+      if(isSetItem(o)){
+        const ka=document.querySelector(`input[name="fl-kind-${idx}a"]:checked`)?.value||'',kb=document.querySelector(`input[name="fl-kind-${idx}b"]:checked`)?.value||'';
+        document.getElementById('err-fl-kind-'+idx+'a')?.classList.toggle('show',!ka);
+        document.getElementById('err-fl-kind-'+idx+'b')?.classList.toggle('show',!kb);
+        if(!ka||!kb)kindNg=true;
+        items.push({item:o,kind:(ka&&kb)?'アレンジ：'+ka+'／ミニブーケ：'+kb:''});
+        return;
+      }
+      const kind=document.querySelector(`input[name="fl-kind-${idx}"]:checked`)?.value||'';
+      items.push({item:o,kind});
+      document.getElementById('err-fl-kind-'+idx)?.classList.toggle('show',!kind);
+      if(!kind)kindNg=true;
+    });
+    const itemNg=!items.length;
+    document.getElementById('err-fl-item')?.classList.toggle('show',itemNg);
+    flowerData.items=items;
+    flowerData.item=items.map(x=>x.item).join(', ');
+    flowerData.kinds=items.map(x=>x.kind);
+    flowerData.mood=items.map(x=>x.kind).join('、'); // 既存の「雰囲気」欄にも同じ内容を保存
+    if(itemNg||kindNg)return;
   }
   currentStep++;renderFlower();
 }
@@ -1016,6 +1238,10 @@ async function submitSection(section){
     const result=await apiPost(payload);
     document.getElementById('sending-overlay').classList.remove('show');
     if(result.ok){sectionStatus[section]=true;showSectionDone(section);}
+    else if(result.error==='locked'){
+      if(btn)btn.disabled=false;
+      await noticeDialog({title:result.error==='locked'?'変更できません':'送信できません',items:[result.message||'送信できませんでした。','お手数ですが、スタジオまでご連絡ください。'],okText:'閉じる'});
+    }
     else{alert('送信に失敗しました。\n'+(result.error||''));if(btn)btn.disabled=false;}
   }catch(e){
     document.getElementById('sending-overlay').classList.remove('show');
@@ -1139,6 +1365,7 @@ function isAllAnswered(c){
   return(!needsFlower||ss.flower)&&(!needsHair||ss.hair)&&outfitDone;
 }
 function getAlertDays(){return parseInt(SETTINGS.alert_days||'7',10);}
+function isDoneC(c){return !!c.completed;}
 function isUrgent(c){
   if(!c.shootDate||c.completed)return false;
   const days=getAlertDays();
@@ -1150,21 +1377,39 @@ function isUrgent(c){
 }
 
 function showAdminDash(){
-  const pendingItems=allCustomers.filter(c=>!c.completed);
-  const doneItems=allCustomers.filter(c=>c.completed);
+  listQuery="";
+  const pendingItems=allCustomers.filter(c=>!isDoneC(c));
+  const doneItems=allCustomers.filter(c=>isDoneC(c));
   const urgentItems=pendingItems.filter(c=>isUrgent(c));
   document.getElementById('admin-sub').textContent='全'+allCustomers.length+'件';
   let urgentHtml='';
   if(urgentItems.length>0){
     urgentHtml=`<div class="alert-banner"><div class="alert-banner-title">⚠️ 撮影${getAlertDays()}日以内で要確認のお客様（${urgentItems.length}名）</div>${urgentItems.map(c=>`<div class="alert-item">・${c.name} 様　撮影日：${fmtD(c.shootDate)}</div>`).join('')}</div>`;
   }
+  const errItems=allCustomers.filter(c=>c.transcribeError);
+  const errHtml=errItems.length?`<div class="alert-banner"><div class="alert-banner-title">⚠️ 転記先に書き込めていないお客様（${errItems.length}名）</div>${errItems.map(c=>`<div class="alert-item">・${escH(c.name)} 様　撮影日：${fmtD(c.shootDate)}　（カードの「再転記する」を押してください）</div>`).join('')}</div>`:'';
   document.getElementById('admin-wrap').innerHTML=`
-    ${urgentHtml}
+    ${urgentHtml}${errHtml}
     <div class="create-customer-wrap">
       <div class="create-customer-title">📋 お客様URLの発行</div>
       <div class="create-fields">
         <div class="create-field"><label>お客様名<span style="color:var(--error)">必須</span></label><input type="text" id="new-name" placeholder="山田 花子"></div>
         <div class="create-field"><label>撮影日<span style="color:var(--error)">必須</span></label><input type="date" id="new-date"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin:10px 0 6px">▼ ご利用オプション（選んだものだけ、お客様の画面に回答欄が出ます）</div>
+      <div class="create-fields">
+        <div class="create-field"><label>花束<span style="color:var(--error)">必須</span></label><select id="new-opt-flower"><option value="">選択してください</option><option value="none">なし</option><option value="fresh">生花</option><option value="artificial">造花</option><option value="both">生花と造花の両方</option></select></div>
+        <div class="create-field"><label>ヘアメイク<span style="color:var(--error)">必須</span></label><select id="new-opt-hair"><option value="">選択してください</option><option value="none">なし</option><option value="female">女性ヘアセット＆メイク</option><option value="male">男性ヘアセット</option><option value="both">両方（女性＋男性）</option></select></div>
+        <div class="create-field"><label>衣装レンタル<span style="color:var(--error)">必須</span></label><select id="new-opt-outfit"><option value="">選択してください</option><option value="none">なし</option><option value="outfit">あり</option></select></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin:10px 0 6px">▼ rih発注フォームの転記用（お客様には表示されません。<b>花束を「あり」にした場合だけ転記</b>されます）</div>
+      <div class="create-fields">
+        <div class="create-field"><label>発注者（お名前）<span style="color:var(--error)">必須</span></label><input type="text" id="new-orderer" placeholder="担当者の名前"></div>
+        <div class="create-field"><label>発注元<span style="color:var(--error)">必須</span></label><select id="new-source">${ORDER_SOURCES.map(o=>`<option>${o}</option>`).join('')}</select></div>
+        <div class="create-field"><label>撮影時間<span style="color:var(--error)">必須</span></label><input type="text" id="new-time" placeholder="10:00〜"></div>
+        <div class="create-field"><label>管理番号<span style="color:var(--error)">必須</span></label><input type="text" id="new-mgmt" placeholder="ファミリーフォトの管理番号"></div>
+        <div class="create-field"><label>撮影テーマ<span style="color:var(--error)">必須</span></label><select id="new-theme">${ORDER_THEMES.map(o=>`<option>${o}</option>`).join('')}</select></div>
+        <div class="create-field"><label>受渡方法<span style="color:var(--error)">必須</span></label><select id="new-delivery">${ORDER_DELIVERY.map(o=>`<option>${o}</option>`).join('')}</select></div>
       </div>
       <button class="btn-create" onclick="createCustomer()">URLを発行する</button>
       <div class="created-url-box" id="created-url-box">
@@ -1183,6 +1428,7 @@ function resetCreateForm(){
   document.getElementById('created-url-box').classList.remove('show');
   document.getElementById('new-name').value='';
   document.getElementById('new-date').value='';
+  ['new-orderer','new-time','new-mgmt','new-opt-flower','new-opt-hair','new-opt-outfit'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
   document.getElementById('created-url-text').textContent='';
 }
 async function createCustomer(){
@@ -1190,26 +1436,49 @@ async function createCustomer(){
   const shootDate=document.getElementById('new-date')?.value;
   if(!name){alert('お客様名を入力してください');return;}
   if(!shootDate){alert('撮影日を入力してください');return;}
+  const gv=i=>(document.getElementById(i)?.value||'').trim();
+  const orderInfo={orderer:gv('new-orderer'),source:gv('new-source'),shootTime:gv('new-time'),mgmtNo:gv('new-mgmt'),theme:gv('new-theme'),delivery:gv('new-delivery')};
+  const optFlower=gv('new-opt-flower'),optHair=gv('new-opt-hair'),optOutfit=gv('new-opt-outfit');
+  if(!optFlower||!optHair||!optOutfit){alert('花束・ヘアメイク・衣装レンタルの「あり／なし」を選んでください');return;}
+  const flowerOn=optFlower!=='none';              // 花束あり（転記の対象）
+  const freshOn=hasFreshOpt(optFlower);           // 生花を含む（受付曜日・締切・仕入れ後ロックの対象）
+  if(flowerOn&&(!orderInfo.orderer||!orderInfo.shootTime||!orderInfo.mgmtNo)){alert('花束ありの場合は、発注者・撮影時間・管理番号を入力してください');return;}
+  if(window._creating)return;
+  window._creating=true;
   try{
-    const r=await adminPost({action:'createCustomer',name,shootDate,flowerOption:'none',hairOption:'none'});
+  // 受付できない曜日／締切超過の場合は注意画面（スタッフの判断で、そのまま発行も可能）
+  const warns=freshOn?checkOrderRules(shootDate,orderInfo.source,orderInfo.delivery):[]; // 受付ルールは生花（花材の仕入れ）に関するもの。造花のみ・花束なしは対象外
+  if(warns.length){
+    const ans=await noticeDialog({title:'受付できない可能性があります',items:warns,okText:'このままURLを発行する',cancelText:'戻って修正する',altText:'造花プランでURLを発行する'});
+    if(!ans)return;
+    if(ans==='alt'){document.getElementById('new-opt-flower').value='artificial';window._creating=false;await createCustomer();return;}
+  }
+  try{
+    const r=await adminPost({action:'createCustomer',name,shootDate,optionsFixed:true,flowerOption:optFlower,hairOption:optHair,outfitOption:optOutfit,...orderInfo});
     if(!r.ok)throw new Error(r.error);
     const url=location.origin+location.pathname+'?cid='+r.cid;
     document.getElementById('created-url-text').textContent=url;
     document.getElementById('created-url-box').classList.add('show');
-    allCustomers.unshift({id:r.cid,name,shootDate,flowerOption:'none',hairOption:'none',sectionSentStatus:{},completed:false,copiedSections:{},createdAt:new Date().toString()});
+    allCustomers.unshift({id:r.cid,name,shootDate,orderInfo,flowerOption:optFlower,hairOption:optHair,transcribeError:(r.transcribe&&!r.transcribe.ok)?(r.transcribe.error||'失敗'):'',sectionSentStatus:{optionsFixed:true,...(optOutfit==='outfit'?{outfitChosen:true}:{outfitNotNeeded:true})},completed:false,copiedSections:{},cancelledAt:'',createdAt:new Date().toString()});
     document.getElementById('admin-sub').textContent='全'+allCustomers.length+'件';
+    if(r.transcribe&&!r.transcribe.ok)alert('URLは発行しましたが、転記先への書き込みに失敗しました。\n'+(r.transcribe.error||''));
+    else transcribeMissingNotice(r);
   }catch(e){alert('URL発行に失敗しました。');}
+  }finally{window._creating=false;}
 }
 
 let listSort='shootDate',listFilter='all';
 function showAdminList(type){
-  const baseItems=type==='pending'?allCustomers.filter(c=>!c.completed):allCustomers.filter(c=>c.completed);
+  const baseItems=type==='pending'?allCustomers.filter(c=>!isDoneC(c)):allCustomers.filter(c=>isDoneC(c));
   const title=type==='pending'?'要確認':'対応済み';
   renderAdminList(type,baseItems);
 }
-function renderAdminList(type,baseItems){
-  // 絞り込み
+let listQuery='';
+function normQ(t){return String(t||'').normalize('NFKC').toLowerCase().replace(/[\s　]+/g,'').replace(/[ァ-ヶ]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0x60));}
+function listItemsFor(type,baseItems){
   let items=[...baseItems];
+  const q=normQ(listQuery);
+  if(q)items=items.filter(c=>normQ(c.name).includes(q)||normQ(c.orderInfo&&c.orderInfo.mgmtNo).includes(q));
   if(listFilter==='flower')items=items.filter(c=>c.sectionSentStatus?.flower);
   else if(listFilter==='hair')items=items.filter(c=>c.sectionSentStatus?.hair);
   else if(listFilter==='outfit')items=items.filter(c=>c.sectionSentStatus?.outfit);
@@ -1217,12 +1486,27 @@ function renderAdminList(type,baseItems){
   // 並び替え
   if(listSort==='shootDate')items.sort((a,b)=>new Date(a.shootDate)-new Date(b.shootDate));
   else if(listSort==='createdAt')items.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  return items;
+}
+function listCardsHtml(items){
+  return items.length===0?'<p style="text-align:center;padding:40px 0;color:var(--muted);font-size:14px">該当するお客様はいません</p>':items.map(buildAdminCard).join('');
+}
+function onListSearch(type,v){
+  listQuery=v;
+  const base=type==='pending'?allCustomers.filter(c=>!isDoneC(c)):allCustomers.filter(c=>isDoneC(c));
+  const items=listItemsFor(type,base);
+  document.getElementById('list-count').textContent=items.length;
+  document.getElementById('admin-cards').innerHTML=listCardsHtml(items);
+}
+function renderAdminList(type,baseItems){
+  const items=listItemsFor(type,baseItems);
   const title=type==='pending'?'要確認':'対応済み';
   document.getElementById('admin-wrap').innerHTML=`
     <div class="list-header">
       <button class="btn-back-list" onclick="showAdminDash()">← トップへ</button>
-      <span class="list-title">${title}（${items.length}件）</span>
+      <span class="list-title">${title}（<span id="list-count">${items.length}</span>件）</span>
     </div>
+    <div style="margin-bottom:12px"><input type="search" id="list-search" placeholder="🔍 お名前で検索（管理番号もOK）" value="${escH(listQuery)}" oninput="onListSearch('${type}',this.value)" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:14px;background:var(--warm-white)"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
       <select onchange="listSort=this.value;showAdminList('${type}')" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:12px;background:var(--warm-white);cursor:pointer;">
         <option value="shootDate"${listSort==='shootDate'?' selected':''}>📅 撮影日が近い順</option>
@@ -1236,7 +1520,7 @@ function renderAdminList(type,baseItems){
         <option value="outfit"${listFilter==='outfit'?' selected':''}>👗 衣装回答済み</option>
       </select>
     </div>
-    ${items.length===0?'<p style="text-align:center;padding:40px 0;color:var(--muted);font-size:14px">該当するお客様はいません</p>':items.map(buildAdminCard).join('')}`;
+    <div id="admin-cards">${listCardsHtml(items)}</div>`;
 }
 
 function buildAdminCard(c){
@@ -1252,7 +1536,9 @@ function buildAdminCard(c){
   // 全オプション対象外（花束なし・ヘアメイクなし・衣装も不要）の場合はURL非表示
   const allNotNeeded=ss.allNotNeeded===true;
   const badge=allNotNeeded?'<span style="display:inline-block;background:#E8E0D5;color:#7A7570;font-size:10px;padding:2px 8px;border-radius:10px;margin-left:8px;">全対象外</span>':answered&&!c.completed?'<span class="badge-new">全回答済</span>':c.completed?'':!answered?'<span style="display:inline-block;background:#FEF3E2;color:#A05C00;border:1px solid #F5C26B;font-size:10px;padding:2px 8px;border-radius:10px;margin-left:8px;">回答待ち</span>':'';
-  const urgentBadge=urgent?'<span class="badge-urgent">⚠️ 期限注意</span>':'';
+  const locked=lockedC(c);
+  const urgentBadge=(urgent?'<span class="badge-urgent">⚠️ 期限注意</span>':'')+
+    (locked?'<span class="badge-urgent" style="background:#8A7A5A">⚠️ 撮影3日前以降（仕入れ後）</span>':'');
   const secSt=(sec,label,needed)=>{
     // オプション未選択の場合は全部「未回答」表示
     if(!needed&&!noAnswerYet)return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><span style="font-size:12px;color:var(--muted)">${label}</span><span style="font-size:10px;color:var(--muted)">対象外</span></div>`;
@@ -1265,6 +1551,9 @@ function buildAdminCard(c){
       <div class="admin-card-meta">撮影日：${fmtD(c.shootDate)}　発行：${fmtDT(c.createdAt)}</div>
     </div>
     <div class="admin-card-body">
+      ${c.transcribeError?`<div style="background:#FDECEA;border:1px solid #E8A0A0;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--error);line-height:1.7">⚠️ <b>転記先への書き込みに失敗しています（未転記）</b><br>${escH(c.transcribeError)}<br><button onclick="retranscribe('${c.id}',this)" style="margin-top:6px;padding:7px 14px;background:var(--error);border:none;border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:12px;color:#fff;cursor:pointer;">再転記する</button></div>`:''}
+      ${c.orderInfo&&c.orderInfo.mgmtNo?`<div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.7">発注者：${escH(c.orderInfo.orderer)}（${escH(c.orderInfo.source)}）／ 管理番号：${escH(c.orderInfo.mgmtNo)} ／ ${escH(c.orderInfo.shootTime)} ／ ${escH(c.orderInfo.theme)} ／ ${escH(c.orderInfo.delivery)}</div>`:''}
+      ${`<div style="margin-bottom:12px"><button onclick="toggleEdit('${c.id}')" style="padding:7px 14px;background:transparent;border:1px solid var(--border);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:12px;color:var(--dark);cursor:pointer;">✏️ 撮影日・発注情報・オプションを変更</button></div><div id="edit-${c.id}"></div>`}
       <div style="margin-bottom:14px">
         ${secSt('flower','🌷 花束',needsFlower)}
         ${secSt('hair','💄 ヘアメイク',needsHair)}
@@ -1291,43 +1580,63 @@ function buildAdminCard(c){
         <button id="det-btn-${c.id}" onclick="loadDetail('${c.id}')" style="width:100%;padding:10px;background:var(--cream);border:1px dashed var(--border);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:12px;color:var(--muted);cursor:pointer;">📋 回答詳細を表示する</button>
         <div id="det-${c.id}"></div>
       </div>
-      ${!c.completed?`<div class="action-btns">
-        <button class="btn-complete" onclick="completeCustomer('${c.id}')">✓ 対応済みにする</button>
+      <div class="action-btns">
+        ${!c.completed?`<button class="btn-complete" onclick="completeCustomer('${c.id}')">✓ 対応済みにする</button>`:''}
         <button class="btn-delete" onclick="deleteCustomer('${c.id}')">🗑 削除</button>
-      </div>`:`<div class="action-btns"><button class="btn-delete" onclick="deleteCustomer('${c.id}')">🗑 削除</button></div>`}
+      </div>
     </div>
   </div>`;
 }
 
+// 転記先への書き込みに失敗したお客様を、保存済みのデータから書き直す
+async function retranscribe(id,btn){
+  btn.disabled=true;btn.textContent='転記中…';
+  try{
+    const r=await adminPost({action:'retranscribe',cid:id});
+    if(r.ok){
+      await reloadCustomers();
+      transcribeMissingNotice({transcribe:{ok:true,missing:r.missing}});
+      const cx=allCustomers.find(x=>x.id===id);
+      alert('転記先に書き込みました。');
+      showAdminList(cx&&isDoneC(cx)?'done':'pending');
+    }else{alert('再転記に失敗しました：'+(r.error||'')+'\n転記先のシートの状態（共有設定・見出し）を確認して、もう一度お試しください。');btn.disabled=false;btn.textContent='再転記する';}
+  }catch(e){alert('エラーが発生しました。');btn.disabled=false;btn.textContent='再転記する';}
+}
+async function reloadCustomers(){
+  const a=await adminGet({action:'getAllCustomers'});
+  if(a.ok)allCustomers=a.data.reverse();
+}
+async function resetFailNotice(r){
+  if(r.error==='locked')await noticeDialog({title:'リセットできません',items:[r.message||'リセットできませんでした。'],okText:'閉じる'});
+  else alert('リセットに失敗しました：'+(r.error||''));
+}
 async function resetAllOptions(cid,btn){
-  if(!confirm('全てのオプションをリセットします。\nお客様が最初からやり直せるようになります。'))return;
+  {const c0=allCustomers.find(x=>x.id===cid);if(c0&&lockedC(c0)&&!(await rihConfirm(c0,'リセット')))return;}
+  if(!confirm('全ての回答をリセットします。\nお客様が最初からやり直せるようになります。\n（花束ありの場合、転記先のアイテム・種類・備考は空になります）'))return;
   btn.disabled=true;btn.textContent='処理中…';
   try{
     const r=await adminPost({action:'resetAllOptions',cid});
     if(r.ok){
+      await reloadCustomers();
       const cx=allCustomers.find(x=>x.id===cid);
-      if(cx){
-        cx.sectionSentStatus={};
-        cx.flowerOption='none';
-        cx.hairOption='none';
-      }
       alert('リセットしました。お客様に再度URLを送ってください。');
-      showAdminList(cx?.completed?'done':'pending');
-    }else{alert('リセットに失敗しました：'+(r.error||''));}
+      showAdminList(cx&&isDoneC(cx)?'done':'pending');
+    }else{await resetFailNotice(r);btn.disabled=false;btn.textContent='🔄 全てリセット';}
   }catch(e){alert('エラーが発生しました。');}
 }
 async function resetSection(cid,section,btn){
-  if(!confirm(`「${section==='flower'?'花束':section==='hair'?'ヘアメイク':'衣装'}」の回答をリセットしますか？\nお客様が再回答できるようになります。`))return;
+  if(section==='flower'){const c0=allCustomers.find(x=>x.id===cid);if(c0&&lockedC(c0)&&!(await rihConfirm(c0,'花束のリセット')))return;}
+  const label=section==='flower'?'花束':section==='hair'?'ヘアメイク':'衣装';
+  if(!confirm(`「${label}」の回答をリセットしますか？\nお客様が再回答できるようになります。`+(section==='flower'?'\n（転記先のアイテム・種類・備考は空になります）':'')))return;
   btn.disabled=true;btn.textContent='処理中…';
   try{
     const r=await adminPost({action:'resetSection',cid,section});
     if(r.ok){
+      await reloadCustomers();
       const cx=allCustomers.find(x=>x.id===cid);
-      if(cx&&cx.sectionSentStatus)cx.sectionSentStatus[section]=false;
       alert('リセットしました。お客様に再回答URLを送ってください。');
-      // カードを再描画
-      showAdminList(cx?.completed?'done':'pending');
-    }else{alert('リセットに失敗しました：'+(r.error||''));}
+      showAdminList(cx&&isDoneC(cx)?'done':'pending');
+    }else{await resetFailNotice(r);btn.disabled=false;btn.textContent='🔁 '+label+'をリセット';}
   }catch(e){alert('エラーが発生しました。');}
 }
 async function copyUrlAndMark(url,cid,section,btn){
@@ -1339,6 +1648,110 @@ async function copyUrlAndMark(url,cid,section,btn){
   const label=btn.closest('.section-url-row')?.querySelector('.section-url-label');
   if(label&&!label.querySelector('.copied-badge')){const b=document.createElement('span');b.className='copied-badge';b.textContent='コピー済み';label.appendChild(b);}
   adminPost({action:'markUrlCopied',cid,section});
+}
+// ── 撮影日・発注情報の変更 ──
+// 転記先に見つからない列があるとき（見出しの名前が変わった等）に知らせる
+function transcribeMissingNotice(r){
+  const t=r&&r.transcribe;
+  if(t&&t.ok&&t.missing&&t.missing.length)alert('転記先に次の列が見つからないため、その項目は転記されていません：\n'+t.missing.join('、')+'\n\n転記先の見出しの名前が変わっていないか確認してください。');
+}
+const RESET_BTN="padding:8px 12px;background:transparent;border:1px solid var(--error);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:11px;color:var(--error);cursor:pointer;";
+function toggleEdit(id){
+  const box=document.getElementById('edit-'+id);if(!box)return;
+  if(box.innerHTML){box.innerHTML='';return;}
+  const c=allCustomers.find(x=>x.id===id);if(!c)return;
+  const o=c.orderInfo||{};
+  const sel=(arr,v)=>arr.map(x=>`<option${x===v?' selected':''}>${escH(x)}</option>`).join('');
+  const st=c.sectionSentStatus||{};
+  // 現在のオプション（スタッフ選択済みならその値。古いお客様で未選択なら空＝選んでもらう）
+  const answeredAny=!!(st.flower||st.hair||st.outfit||st.outfitChosen||st.outfitNotNeeded||st.allNotNeeded);
+  const fixed=!!st.optionsFixed;
+  const ov={
+    flower:hasFlowerOpt(c.flowerOption)?(c.flowerOption==='flower'?'both':c.flowerOption):((fixed||answeredAny)?'none':''),
+    hair:(c.hairOption&&c.hairOption!=='none')?c.hairOption:((fixed||answeredAny)?'none':''),
+    outfit:(st.outfit||st.outfitChosen)?'outfit':((fixed||answeredAny)?'none':'')
+  };
+  const optSel=(k,opts,cur,answered)=>`<select id="ed-${k}-${id}"${answered?' disabled':''}>${opts.map(([v,l])=>`<option value="${v}"${v===cur?' selected':''}>${l}${answered&&v===cur?'（回答済み）':''}</option>`).join('')}</select>`;
+  const f=(k,label,html)=>`<div class="create-field"><label>${label}</label>${html}</div>`;
+  const inp=(k,v,type)=>`<input type="${type||'text'}" id="ed-${k}-${id}" value="${escH(v)}">`;
+  box.innerHTML=`<div style="background:var(--cream);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:500;margin-bottom:10px">✏️ 撮影日・発注情報・オプションの変更（転記先にも反映されます）</div>
+    <div class="create-fields">
+      ${f('name','お客様名',inp('name',c.name))}
+      ${f('date','撮影日',inp('date',c.shootDate,'date'))}
+      ${f('time','撮影時間',inp('time',o.shootTime))}
+      ${f('mgmt','管理番号',inp('mgmt',o.mgmtNo))}
+      ${f('orderer','発注者（お名前）',inp('orderer',o.orderer))}
+      ${f('source','発注元',`<select id="ed-source-${id}">${sel(ORDER_SOURCES,o.source)}</select>`)}
+      ${f('theme','撮影テーマ',`<select id="ed-theme-${id}">${sel(ORDER_THEMES,o.theme)}</select>`)}
+      ${f('delivery','受渡方法',`<select id="ed-delivery-${id}">${sel(ORDER_DELIVERY,o.delivery)}</select>`)}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin:8px 0 6px">▼ ご利用オプション（回答済みの項目は変更できません）。<b>花束を「あり」にすると、すぐ転記先に行が入ります</b></div>
+    <div class="create-fields">
+      ${f('opt-flower','花束',optSel('opt-flower',[['','選択してください'],['none','なし'],['fresh','生花'],['artificial','造花'],['both','生花と造花の両方']],ov.flower,!!st.flower))}
+      ${f('opt-hair','ヘアメイク',optSel('opt-hair',[['','選択してください'],['none','なし'],['female','女性ヘアセット＆メイク'],['male','男性ヘアセット'],['both','両方（女性＋男性）']],ov.hair,!!st.hair))}
+      ${f('opt-outfit','衣装レンタル',optSel('opt-outfit',[['','選択してください'],['none','なし'],['outfit','あり']],ov.outfit,!!st.outfit))}
+    </div>
+    <div style="display:flex;gap:8px"><button class="btn-create" id="ed-save-${id}" onclick="saveEdit('${id}')">変更を保存する</button><button onclick="toggleEdit('${id}')" style="padding:10px 16px;background:transparent;border:1px solid var(--border);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:13px;color:var(--muted);cursor:pointer;">閉じる</button></div>
+    ${(st.flower||st.hair||st.outfit)?`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">▼ 回答のやり直し（リセットすると、お客様が再回答できます）</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${st.flower?`<button onclick="resetSection('${id}','flower',this)" style="${RESET_BTN}">🌷 花束をリセット</button>`:''}
+        ${st.hair?`<button onclick="resetSection('${id}','hair',this)" style="${RESET_BTN}">💄 ヘアメイクをリセット</button>`:''}
+        ${st.outfit?`<button onclick="resetSection('${id}','outfit',this)" style="${RESET_BTN}">👗 衣装をリセット</button>`:''}
+        <button onclick="resetAllOptions('${id}',this)" style="${RESET_BTN}border-color:var(--muted);color:var(--muted);">🔄 全てリセット</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6">※花束をリセットすると、転記先のアイテム・種類・備考も空になり、状況は「回答待ち」に戻ります（行は消えません）。</div>
+    </div>`:''}
+  </div>`;
+}
+async function saveEdit(id){
+  const c=allCustomers.find(x=>x.id===id);if(!c)return;
+  const gv=k=>(document.getElementById(`ed-${k}-${id}`)?.value||'').trim();
+  const nf={name:gv('name'),shootDate:gv('date'),orderer:gv('orderer'),source:gv('source'),shootTime:gv('time'),mgmtNo:gv('mgmt'),theme:gv('theme'),delivery:gv('delivery')};
+  const gs=k=>document.getElementById(`ed-${k}-${id}`);
+  const optF=gs('opt-flower')?.value,optH=gs('opt-hair')?.value,optO=gs('opt-outfit')?.value;
+  if(!optF||!optH||!optO){alert('花束・ヘアメイク・衣装レンタルの「あり／なし」を選んでください');return;}
+  const wasFresh=hasFreshOpt(c.flowerOption);
+  const isFl=optF!=='none';                 // 花束あり（転記の対象）
+  const isFresh=hasFreshOpt(optF);          // 生花を含む（受付ルールの対象）
+  if(!nf.name||!nf.shootDate||(isFl&&(!nf.orderer||!nf.shootTime||!nf.mgmtNo))){alert(isFl?'お客様名・撮影日・発注者・撮影時間・管理番号は必須です':'お客様名と撮影日は必須です');return;}
+  const o=c.orderInfo||{};
+  const rulesCheck=isFresh&&(nf.shootDate!==c.shootDate||nf.source!==o.source||nf.delivery!==o.delivery||!wasFresh);
+  // 撮影3日前以降（変更前または変更後）で生花が関わる変更は、rihへの確認ポップアップ（下の受付ルールの注意に同じ内容が含まれる場合は、二重に出さない）
+  if((lockedC(c)||(isFresh&&isLockedYmd(nf.shootDate)))&&!(rulesCheck&&isLockedYmd(nf.shootDate)&&checkOrderRules(nf.shootDate,nf.source,nf.delivery).length)){
+    if(!(await rihConfirm(isLockedYmd(nf.shootDate)&&!lockedC(c)?{...c,shootDate:nf.shootDate}:c,'変更')))return;
+  }
+  // 日付・発注元・受渡方法を変えたときだけ、受付ルールの注意画面を出す
+  if(rulesCheck){
+    const warns=checkOrderRules(nf.shootDate,nf.source,nf.delivery);
+    if(warns.length){
+      const ans=await noticeDialog({title:'受付できない可能性があります',items:warns,okText:'このまま変更する',cancelText:'戻って修正する',altText:'造花プランに切り替えて変更する'});
+      if(!ans)return;
+      if(ans==='alt'){const sel=gs('opt-flower');if(sel&&!sel.disabled)sel.value='artificial';await saveEdit(id);return;}
+    }
+  }
+  const btn=document.getElementById('ed-save-'+id);if(btn){btn.disabled=true;btn.textContent='保存中…';}
+  try{
+    const r=await adminPost({action:'updateOrder',cid:id,...nf,optionsFixed:true,flowerOption:optF,hairOption:optH,outfitOption:optO});
+    if(!r.ok){
+      if(r.error==='locked'||r.error==='answered')await noticeDialog({title:'変更できません',items:[r.message||'変更できませんでした。'],okText:'閉じる'});
+      else alert('変更に失敗しました：'+(r.error||''));
+      if(btn){btn.disabled=false;btn.textContent='変更を保存する';}
+      return;
+    }
+    c.name=nf.name;c.shootDate=r.shootDate||nf.shootDate;
+    c.orderInfo={orderer:nf.orderer,source:nf.source,shootTime:nf.shootTime,mgmtNo:nf.mgmtNo,theme:nf.theme,delivery:nf.delivery};
+    c.flowerOption=optF;c.hairOption=optH;
+    c.transcribeError=(r.transcribe&&!r.transcribe.ok)?(r.transcribe.error||'失敗'):'';
+    const nst=c.sectionSentStatus=c.sectionSentStatus||{};
+    nst.optionsFixed=true;delete nst.allNotNeeded;delete nst.outfitChosen;delete nst.outfitNotNeeded;
+    if(optO==='outfit')nst.outfitChosen=true;else nst.outfitNotNeeded=true;
+    transcribeMissingNotice(r);
+    if(r.transcribe&&!r.transcribe.ok)alert('変更は保存しましたが、転記先への反映に失敗しました。\n'+(r.transcribe.error||''));
+    else alert('変更しました。転記先にも反映されています。');
+    showAdminList(isDoneC(c)?'done':'pending');
+  }catch(e){alert('エラーが発生しました。');if(btn){btn.disabled=false;btn.textContent='変更を保存する';}}
 }
 async function completeCustomer(id){
   if(!confirm('対応済みに移動しますか？'))return;
@@ -1378,8 +1791,8 @@ async function loadDetail(id){
         <div class="admin-grid">
           <div><div class="admin-fl">お名前</div>${d.flower.name||''}</div>
           <div><div class="admin-fl">撮影日</div>${fmtD(d.flower.shootDate)}</div>
-          <div><div class="admin-fl">雰囲気</div>${d.flower.mood||''}</div>
-          ${d.flower.note?`<div><div class="admin-fl">補足</div>${d.flower.note}</div>`:''}
+          ${flItems(d.flower).map(x=>`<div><div class="admin-fl">アイテム</div>${escH(x.item)}<br><span style="color:var(--muted)">種類：</span>${escH(x.kind)}</div>`).join('')}
+          ${d.flower.note?`<div><div class="admin-fl">備考</div>${escH(d.flower.note)}</div>`:''}
         </div>`;
       h+=photoRow('撮影者の写真',d.flower.personImages);
       h+=photoRow('衣装写真',d.flower.outfitImages);
@@ -1432,17 +1845,6 @@ async function loadDetail(id){
           </div>`).join('')}</div>`;
       }
     }
-    // リセットボタン追加
-    h+=`<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">回答をリセットするとお客様が再回答できます。</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        ${d.flower?`<button onclick="resetSection('${id}','flower',this)" style="padding:8px 12px;background:transparent;border:1px solid var(--error);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:11px;color:var(--error);cursor:pointer;">🌷 花束をリセット</button>`:''}
-        ${d.hair?`<button onclick="resetSection('${id}','hair',this)" style="padding:8px 12px;background:transparent;border:1px solid var(--error);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:11px;color:var(--error);cursor:pointer;">💄 ヘアをリセット</button>`:''}
-        ${d.outfit?`<button onclick="resetSection('${id}','outfit',this)" style="padding:8px 12px;background:transparent;border:1px solid var(--error);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:11px;color:var(--error);cursor:pointer;">👗 衣装をリセット</button>`:''}
-        <button onclick="resetAllOptions('${id}',this)" style="padding:8px 12px;background:transparent;border:1px solid var(--muted);border-radius:8px;font-family:'Noto Sans JP',sans-serif;font-size:11px;color:var(--muted);cursor:pointer;">🔄 全てリセット（対象外も解消）</button>
-      </div>
-
-    </div>`;
     w.innerHTML=h||'<p style="font-size:12px;color:var(--muted)">回答なし</p>';
     btn.style.display='none';
     lazyLoadImages(w);
@@ -1509,7 +1911,7 @@ async function initSalon(id,section){
     const cSS=c?.sectionSentStatus||{};
     const allNotNeededFlag=cSS.allNotNeeded===true;
     // お客様がまだオプション選択自体していない（発行直後）
-    const customerNotAnsweredYet=!cSS.flower&&!cSS.hair&&!cSS.outfit&&!allNotNeededFlag&&flowerOpt==='none'&&hairOpt==='none';
+    const customerNotAnsweredYet=!cSS.optionsFixed&&!cSS.flower&&!cSS.hair&&!cSS.outfit&&!allNotNeededFlag&&flowerOpt==='none'&&hairOpt==='none';
     // 対象外: お客様がオプション不要と明示的に選択した場合
     const isOutOfScope=!customerNotAnsweredYet&&(
       (section==='flower'&&flowerOpt==='none'&&!allNotNeededFlag)||
@@ -1530,8 +1932,8 @@ async function initSalon(id,section){
       body+=`<div class="salon-section"><div class="salon-sec-title flower">🌷 花束ご要望</div><div class="salon-grid">
         <div><div class="salon-fl">お名前</div><div class="salon-fv">${d.flower.name||''}</div></div>
         <div><div class="salon-fl">撮影日</div><div class="salon-fv">${fmtD(d.flower.shootDate)}</div></div>
-        <div><div class="salon-fl">雰囲気</div><div class="salon-fv">${d.flower.mood||''}</div></div>
-        ${d.flower.note?`<div><div class="salon-fl">補足</div><div class="salon-fv">${d.flower.note}</div></div>`:''}
+        ${flItems(d.flower).map(x=>`<div><div class="salon-fl">アイテム</div><div class="salon-fv">${escH(x.item)}<br><span style="color:var(--muted)">種類：</span>${escH(x.kind)}</div></div>`).join('')}
+        ${d.flower.note?`<div><div class="salon-fl">備考</div><div class="salon-fv">${escH(d.flower.note)}</div></div>`:''}
       </div></div>`;
       body+=pSec('撮影者の普段の様子',d.flower.personImages,'flower');
       body+=pSec('衣装写真',d.flower.outfitImages,'flower');
@@ -1594,11 +1996,75 @@ async function initSalon(id,section){
 let currentAdminTab = 'customers';
 function switchAdminTab(tab) {
   currentAdminTab = tab;
-  ['customers','upload','settings'].forEach(t => {
+  ['customers','upload','flowerimg','settings'].forEach(t => {
     document.getElementById('tab-'+t).classList.toggle('active', tab === t);
     document.getElementById('admin-tab-'+t).style.display = tab === t ? '' : 'none';
   });
   if(tab === 'settings') loadSettingsTab();
+  if(tab === 'flowerimg') loadFlowerImgTab();
+}
+
+// ── お花画像（造花の完成品の写真） ──
+async function loadFlowerImgTab(){
+  const w=document.getElementById('flowerimg-body');
+  try{const r=await adminGet({action:'getSettings'});if(!r.ok)throw new Error(r.error);Object.assign(SETTINGS,r.data);settingsLoaded=true;renderFlowerImgTab();}
+  catch(e){w.innerHTML='<div class="loading-box">読み込みに失敗しました。「更新」を押してください。</div>';}
+}
+function renderFlowerImgTab(){
+  const w=document.getElementById('flowerimg-body');
+  w.innerHTML=FLOWER_ITEMS.map((o,idx)=>!isArtItem(o)?'':`
+    <div style="margin-bottom:22px"><div style="font-size:14px;font-weight:500;margin-bottom:2px">${isSetItem(o)?'造花アレンジ（2個）の写真':'造花ミニブーケの写真'}</div><div style="font-size:11px;color:var(--muted);margin-bottom:8px">${isSetItem(o)?'「アレンジとミニブーケのセット」の、アレンジ部分に表示されます':'単品の「造花ミニブーケ」と、セットのミニブーケ部分の両方に表示されます'}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
+      ${ART_KINDS.map(k=>{const L=fiList(idx,k);return`<div class="fi-slot" id="fi-${idx}-${k}"><div style="font-size:13px;font-weight:500">${escH(k)}</div>
+        <div class="fi-thumbs">${L.map((u,i)=>`<div class="fi-thumb"><img src="${escH(u)}" loading="lazy"><button title="削除" onclick="fiDel(${idx},'${k}',${i})">✕</button></div>`).join('')||'<span style="font-size:11px;color:var(--muted)">写真なし</span>'}</div>
+        ${L.length>=4?'<div style="font-size:11px;color:var(--muted)">最大4枚です</div>':`<label style="display:inline-block;padding:7px 12px;border:1px dashed var(--accent);border-radius:8px;font-size:12px;color:var(--accent);cursor:pointer">＋ 写真を追加<input type="file" accept="image/*" multiple style="display:none" onchange="fiAdd(${idx},'${k}',this)"></label>`}
+        <div id="fi-msg-${idx}-${k}" style="font-size:11px;color:var(--muted);margin-top:4px"></div></div>`;}).join('')}
+      </div></div>`).join('');
+}
+function fiResize(file,max=1200){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onerror=rej;
+    fr.onload=e=>{
+      const im=new Image();
+      im.onerror=rej;
+      im.onload=()=>{
+        const sc=Math.min(1,max/Math.max(im.width,im.height));
+        const c=document.createElement('canvas');c.width=Math.round(im.width*sc);c.height=Math.round(im.height*sc);
+        c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+        res(c.toDataURL('image/jpeg',0.85));
+      };
+      im.src=e.target.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+async function fiSave(idx,kind,list){
+  const r=await adminPost({action:'saveSetting',key:fiKey(idx,kind),value:list.join(',')});
+  if(!r.ok)throw new Error(r.error||'save failed');
+  SETTINGS[fiKey(idx,kind)]=list.join(',');
+}
+async function fiAdd(idx,kind,input){
+  const files=[...input.files];input.value='';
+  const msg=document.getElementById(`fi-msg-${idx}-${kind}`);
+  const list=fiList(idx,kind);
+  try{
+    for(const f of files){
+      if(list.length>=4)break;
+      if(msg)msg.textContent='アップロード中…';
+      const b64=await fiResize(f);
+      const r=await adminPost({action:'uploadOutfitImage',b64,filename:f.name});
+      if(!r.ok)throw new Error(r.error||'upload failed');
+      list.push(r.url);
+      await fiSave(idx,kind,list);
+    }
+    renderFlowerImgTab();
+  }catch(e){if(msg)msg.textContent='失敗しました：'+(e.message||'');else alert('失敗しました');renderFlowerImgTab();}
+}
+async function fiDel(idx,kind,i){
+  if(!confirm('この写真を削除しますか？'))return;
+  const list=fiList(idx,kind);list.splice(i,1);
+  try{await fiSave(idx,kind,list);renderFlowerImgTab();}catch(e){alert('削除に失敗しました');}
 }
 
 async function loadSettingsTab() {
@@ -1622,6 +2088,7 @@ async function loadSettingsTab() {
     ];
 
     const fields = [
+      { key:'flower_notice_art', label:'🌷 花束 注意書き（造花のみのお客様用）', colorKey:'flower_notice_art_color', default:FLOWER_NOTICE_ART_DEFAULT },
       { key:'flower_notice', label:'🌷 花束 注意書き', colorKey:'flower_notice_color', default:'🌸 rihでの花束をご希望ありがとうございます✨<br>お客様の雰囲気にあった花束をお作りします。※細かいお花のご指定はできかねますのでご了承ください🙇' },
       { key:'hair_notice', label:'💄 ヘアメイク 注意書き', colorKey:'hair_notice_color', default:'🔶 つけまつげ、アイプチ・メザイク、金箔やラメ・グリッター、リボン、パールシールなどは撮影日当日お持ち込みください。<br><br>🔶 メイクアイテムのお持ち込みは自由です。敏感肌の方は普段使用のアイテムをお持ち込みください。<br><br>＜ご注意＞ 撮影中のヘアメイクチェンジは承っておりません。' },
       { key:'outfit_notice', label:'👗 衣装レンタル 注意書き', colorKey:'outfit_notice_color', default:'プラン内ではメインで撮影される方の<strong>1コーデ分のみ無料</strong>でレンタルできます（例：トップス1着＋パンツ1着）。<br>別でもう1コーデ追加されたい場合は、別途 <strong>¥3,300</strong> となります。' },
